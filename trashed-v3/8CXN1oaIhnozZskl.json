@@ -1,0 +1,799 @@
+{
+  "createdAt": "2025-10-17T10:35:52.702Z",
+  "updatedAt": "2025-10-17T12:34:20.000Z",
+  "id": "8CXN1oaIhnozZskl",
+  "name": "GitHub Backup n8n Workflows",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "owner",
+              "name": "githubOwner",
+              "value": "gander",
+              "type": "string"
+            },
+            {
+              "id": "repo",
+              "name": "githubRepo",
+              "value": "playground-n8n-backup-verify",
+              "type": "string"
+            },
+            {
+              "id": "branch",
+              "name": "githubBranch",
+              "value": "v3",
+              "type": "string"
+            },
+            {
+              "id": "path",
+              "name": "workflowsPath",
+              "value": "trashed-v3",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config",
+      "name": "Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('Configuration').item.json.githubOwner }}/{{ $('Configuration').item.json.githubRepo }}/branches/{{ $('Configuration').item.json.githubBranch }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "check-branch-exists",
+      "name": "Check Branch Exists",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        688,
+        528
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "nV59AGebznqs2JRZ",
+          "name": "n8n-mcp-create-backup"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "owner": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubOwner }}"
+        },
+        "repository": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubRepo }}"
+        },
+        "filePath": "={{ $('Configuration').item.json.workflowsPath }}",
+        "asBinaryProperty": false,
+        "additionalParameters": {
+          "reference": "={{ $('Configuration').item.json.githubBranch }}"
+        }
+      },
+      "id": "list-workflow-files",
+      "name": "List Workflow Files from GitHub",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        912,
+        528
+      ],
+      "webhookId": "518404d0-85da-4f87-ab31-8e5c006e7345",
+      "credentials": {
+        "githubApi": {
+          "id": "nV59AGebznqs2JRZ",
+          "name": "n8n-mcp-create-backup"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "owner": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubOwner }}"
+        },
+        "repository": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubRepo }}"
+        },
+        "filePath": "index.json",
+        "asBinaryProperty": false,
+        "additionalParameters": {
+          "reference": "={{ $('Configuration').item.json.githubBranch }}"
+        }
+      },
+      "id": "get-index-json",
+      "name": "Get index.json from GitHub",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        1136,
+        528
+      ],
+      "webhookId": "2a1261de-0523-456f-aec0-2724970b65aa",
+      "credentials": {
+        "githubApi": {
+          "id": "nV59AGebznqs2JRZ",
+          "name": "n8n-mcp-create-backup"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Configuration').item.json;\nconst filesInput = $('List Workflow Files from GitHub').all();\n\nconsole.log('=== DEBUG: Files from GitHub ===');\nconsole.log('Total items:', filesInput.length);\n\n// Create Set of existing file IDs in repo\nconst existingFiles = new Set();\n\n// Each item from GitHub is a single file object, not an array\nfilesInput.forEach((item, index) => {\n  console.log(`\\n=== Processing file item ${index} ===`);\n  console.log('item.json:', JSON.stringify(item.json, null, 2));\n  \n  // Skip if error (directory doesn't exist)\n  if (item.json.error) {\n    console.log('ERROR detected - directory does not exist yet');\n    return;\n  }\n  \n  // Each item.json IS a file object\n  const file = item.json;\n  \n  if (file.name && file.name.endsWith('.json') && file.type === 'file') {\n    const id = file.name.replace('.json', '');\n    existingFiles.add(id);\n    console.log('Added file:', file.name, '-> ID:', id);\n  } else {\n    console.log('Skipped (not a .json file or wrong type):', file.name, file.type);\n  }\n});\n\nconsole.log('\\n=== SUMMARY ===');\nconsole.log('Total existing files:', existingFiles.size);\nconsole.log('Existing file IDs:', Array.from(existingFiles));\n\n// Parse index.json from previous node (Get index.json)\nlet indexMap = new Map();\nif ($input.item.json.content) {\n  try {\n    const content = Buffer.from($input.item.json.content, 'base64').toString('utf-8');\n    const indexData = JSON.parse(content);\n    if (indexData.workflows) {\n      indexMap = new Map(indexData.workflows.map(w => [w.id, w]));\n      console.log('Parsed index.json with', indexMap.size, 'workflows');\n    }\n  } catch (error) {\n    console.log('Failed to parse index.json:', error.message);\n  }\n}\n\nreturn {\n  json: {\n    ...config,\n    existingFiles: Array.from(existingFiles),\n    indexMap: Array.from(indexMap.entries()),\n    indexSha: $input.item.json.sha || null\n  }\n};"
+      },
+      "id": "parse-index",
+      "name": "Parse Files and Index",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "filters": {},
+        "requestOptions": {}
+      },
+      "id": "get-all-workflows",
+      "name": "Get All Workflows",
+      "type": "n8n-nodes-base.n8n",
+      "typeVersion": 1,
+      "position": [
+        1584,
+        528
+      ],
+      "credentials": {
+        "n8nApi": {
+          "id": "zCU2c9SbD7b0PkkM",
+          "name": "n8n account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const context = $('Parse Files and Index').item.json;\nconst currentWorkflows = $input.all().map(item => item.json);\n\nconst existingFiles = new Set(context.existingFiles);\nconst indexMap = new Map(context.indexMap);\n\nconst toAdd = [];\nconst toUpdate = [];\nconst toDelete = [];\n\n// CREATE = file doesn't exist in repo\n// UPDATE = file exists AND updatedAt changed\nfor (const workflow of currentWorkflows) {\n  if (!existingFiles.has(workflow.id)) {\n    toAdd.push({ ...workflow, _isNew: true });\n  } else {\n    const indexed = indexMap.get(workflow.id);\n    if (!indexed || indexed.updatedAt !== workflow.updatedAt) {\n      toUpdate.push({ ...workflow, _isNew: false });\n    }\n  }\n}\n\n// DELETE = file exists but workflow not in n8n\nconst currentMap = new Map(currentWorkflows.map(w => [w.id, w]));\nfor (const fileId of existingFiles) {\n  if (!currentMap.has(fileId)) {\n    const indexed = indexMap.get(fileId);\n    toDelete.push({ \n      id: fileId, \n      name: indexed?.name || 'Unknown'\n    });\n  }\n}\n\nreturn {\n  json: {\n    ...context,\n    currentWorkflows: currentWorkflows,\n    toAdd: toAdd,\n    toUpdate: toUpdate,\n    toDelete: toDelete,\n    toProcess: [...toAdd, ...toUpdate],\n    addedCount: toAdd.length,\n    updatedCount: toUpdate.length,\n    deletedCount: toDelete.length\n  }\n};"
+      },
+      "id": "compare-changes",
+      "name": "Compare and Detect Changes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "toProcess",
+        "options": {}
+      },
+      "id": "split-to-process",
+      "name": "Split to Process",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        2032,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "workflowId": {
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "requestOptions": {}
+      },
+      "id": "get-workflow-details",
+      "name": "Get Full Workflow",
+      "type": "n8n-nodes-base.n8n",
+      "typeVersion": 1,
+      "position": [
+        2256,
+        528
+      ],
+      "credentials": {
+        "n8nApi": {
+          "id": "zCU2c9SbD7b0PkkM",
+          "name": "n8n account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const splitItem = $('Split to Process').item.json;\nconst isNew = splitItem._isNew;\n\nconst fullWorkflow = $input.item.json;\n\nreturn {\n  json: {\n    ...fullWorkflow,\n    _isNew: isNew\n  }\n};"
+      },
+      "id": "preserve-is-new",
+      "name": "Preserve _isNew Flag",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2480,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-new-condition",
+              "leftValue": "={{ $json._isNew }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-is-new",
+      "name": "Check If New Workflow",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2704,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "owner": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubOwner }}"
+        },
+        "repository": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubRepo }}"
+        },
+        "filePath": "={{ $('Configuration').item.json.workflowsPath + '/' + $json.id + '.json' }}",
+        "fileContent": "={{ JSON.stringify($json, null, 2) }}",
+        "commitMessage": "={{ 'Add workflow: ' + $json.name }}",
+        "additionalParameters": {
+          "branch": {
+            "branch": "={{ $('Configuration').item.json.githubBranch }}"
+          }
+        }
+      },
+      "id": "create-workflow-file",
+      "name": "Create Workflow File on GitHub",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        2928,
+        432
+      ],
+      "webhookId": "68383955-eb3c-46be-a2d8-72b7ba7a74b8",
+      "credentials": {
+        "githubApi": {
+          "id": "nV59AGebznqs2JRZ",
+          "name": "n8n-mcp-create-backup"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "edit",
+        "owner": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubOwner }}"
+        },
+        "repository": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubRepo }}"
+        },
+        "filePath": "={{ $('Configuration').item.json.workflowsPath + '/' + $json.id + '.json' }}",
+        "fileContent": "={{ JSON.stringify($json, null, 2) }}",
+        "commitMessage": "={{ 'Update workflow: ' + $json.name }}",
+        "additionalParameters": {
+          "branch": {
+            "branch": "={{ $('Configuration').item.json.githubBranch }}"
+          }
+        }
+      },
+      "id": "update-workflow-file",
+      "name": "Update Workflow File on GitHub",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        2928,
+        624
+      ],
+      "webhookId": "9b3a81ee-741a-471d-bb7e-cfb52297e423",
+      "credentials": {
+        "githubApi": {
+          "id": "nV59AGebznqs2JRZ",
+          "name": "n8n-mcp-create-backup"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "aggregate-metadata",
+      "name": "Aggregate Metadata",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        3152,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const context = $('Compare and Detect Changes').item.json;\nconst toDelete = context.toDelete || [];\n\nreturn {\n  json: {\n    ...context,\n    toDelete: toDelete,\n    needsDeletion: toDelete.length > 0\n  }\n};"
+      },
+      "id": "delete-workflows",
+      "name": "Delete Removed Workflows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3376,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const context = $('Delete Removed Workflows').item.json;\nconst currentWorkflows = context.currentWorkflows || [];\n\nconst index = {\n  generatedAt: new Date().toISOString(),\n  totalWorkflows: currentWorkflows.length,\n  workflows: currentWorkflows.map(w => ({\n    id: w.id,\n    name: w.name,\n    tags: w.tags || [],\n    createdAt: w.createdAt,\n    updatedAt: w.updatedAt,\n    active: w.active\n  }))\n};\n\nreturn {\n  json: {\n    ...context,\n    indexContent: JSON.stringify(index, null, 2),\n    index: index\n  }\n};"
+      },
+      "id": "create-new-index",
+      "name": "Create New Index",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "index-exists-condition",
+              "leftValue": "={{ $json.indexSha }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-index-exists",
+      "name": "Check If Index Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3824,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "owner": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubOwner }}"
+        },
+        "repository": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubRepo }}"
+        },
+        "filePath": "index.json",
+        "fileContent": "={{ $json.indexContent }}",
+        "commitMessage": "Create index.json",
+        "additionalParameters": {
+          "branch": {
+            "branch": "={{ $('Configuration').item.json.githubBranch }}"
+          }
+        }
+      },
+      "id": "create-index",
+      "name": "Create Index on GitHub",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        4048,
+        432
+      ],
+      "webhookId": "067cb3c3-29f8-43ee-9cde-e4360e57e8b8",
+      "credentials": {
+        "githubApi": {
+          "id": "nV59AGebznqs2JRZ",
+          "name": "n8n-mcp-create-backup"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "edit",
+        "owner": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubOwner }}"
+        },
+        "repository": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubRepo }}"
+        },
+        "filePath": "index.json",
+        "fileContent": "={{ $json.indexContent }}",
+        "commitMessage": "Update index.json",
+        "additionalParameters": {
+          "branch": {
+            "branch": "={{ $('Configuration').item.json.githubBranch }}"
+          }
+        }
+      },
+      "id": "update-index",
+      "name": "Update Index on GitHub",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        4048,
+        624
+      ],
+      "webhookId": "332ab83f-921c-43f4-a6eb-36f364d3106b",
+      "credentials": {
+        "githubApi": {
+          "id": "nV59AGebznqs2JRZ",
+          "name": "n8n-mcp-create-backup"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## ⚠️ WYMAGANIA:\n\n- **Branch z Configuration MUSI istnieć w repo**\n- Repo może być puste, ale branch musi być utworzony\n- Jeśli branch nie istnieje → workflow zakończy się błędem\n\n## 💡 Jak utworzyć branch:\n\n```bash\ngit checkout -b <nazwa-brancha>\ngit push -u origin <nazwa-brancha>\n```",
+        "height": 240,
+        "width": 400
+      },
+      "id": "requirements-note",
+      "name": "Requirements",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        112
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuration": {
+      "main": [
+        [
+          {
+            "node": "Check Branch Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Branch Exists": {
+      "main": [
+        [
+          {
+            "node": "List Workflow Files from GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Workflow Files from GitHub": {
+      "main": [
+        [
+          {
+            "node": "Get index.json from GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get index.json from GitHub": {
+      "main": [
+        [
+          {
+            "node": "Parse Files and Index",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Files and Index": {
+      "main": [
+        [
+          {
+            "node": "Get All Workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Workflows": {
+      "main": [
+        [
+          {
+            "node": "Compare and Detect Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare and Detect Changes": {
+      "main": [
+        [
+          {
+            "node": "Split to Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split to Process": {
+      "main": [
+        [
+          {
+            "node": "Get Full Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Full Workflow": {
+      "main": [
+        [
+          {
+            "node": "Preserve _isNew Flag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preserve _isNew Flag": {
+      "main": [
+        [
+          {
+            "node": "Check If New Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If New Workflow": {
+      "main": [
+        [
+          {
+            "node": "Create Workflow File on GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Workflow File on GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Workflow File on GitHub": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Workflow File on GitHub": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Metadata": {
+      "main": [
+        [
+          {
+            "node": "Delete Removed Workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Removed Workflows": {
+      "main": [
+        [
+          {
+            "node": "Create New Index",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Index": {
+      "main": [
+        [
+          {
+            "node": "Check If Index Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Index Exists": {
+      "main": [
+        [
+          {
+            "node": "Update Index on GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Index on GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": []
+    }
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "339622d1-aa7c-4e30-a6b1-91ebf6b70d3c",
+  "triggerCount": 1,
+  "shared": [
+    {
+      "createdAt": "2025-10-17T10:35:52.703Z",
+      "updatedAt": "2025-10-17T10:35:52.703Z",
+      "role": "workflow:owner",
+      "workflowId": "8CXN1oaIhnozZskl",
+      "projectId": "wk4O308rOvMQDlVf",
+      "project": {
+        "createdAt": "2025-10-17T08:56:19.401Z",
+        "updatedAt": "2025-10-17T08:58:11.074Z",
+        "id": "wk4O308rOvMQDlVf",
+        "name": "Adam Gąsowski <adam.gasowski@gander.pl>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "projectRelations": [
+          {
+            "createdAt": "2025-10-17T08:56:19.401Z",
+            "updatedAt": "2025-10-17T08:56:19.401Z",
+            "userId": "b6fd1bbf-2d40-44be-b71a-036f189d0266",
+            "projectId": "wk4O308rOvMQDlVf",
+            "user": {
+              "createdAt": "2025-10-17T08:56:18.282Z",
+              "updatedAt": "2025-10-17T08:58:32.000Z",
+              "id": "b6fd1bbf-2d40-44be-b71a-036f189d0266",
+              "email": "adam.gasowski@gander.pl",
+              "firstName": "Adam",
+              "lastName": "Gąsowski",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-10-17T08:58:32.264Z",
+                "personalization_survey_n8n_version": "1.115.3"
+              },
+              "settings": {
+                "userActivated": false
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2025-10-17",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "_isNew": true
+}
