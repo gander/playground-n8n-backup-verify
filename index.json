@@ -1,0 +1,14 @@
+{
+  "generatedAt": "2025-10-17T12:33:25.216Z",
+  "totalWorkflows": 1,
+  "workflows": [
+    {
+      "id": "8CXN1oaIhnozZskl",
+      "name": "GitHub Backup n8n Workflows",
+      "tags": [],
+      "createdAt": "2025-10-17T10:35:52.702Z",
+      "updatedAt": "2025-10-17T12:32:22.720Z",
+      "active": true
+    }
+  ]
+}
