@@ -1,6 +1,6 @@
 {
   "createdAt": "2025-10-17T10:35:52.702Z",
-  "updatedAt": "2025-10-17T12:28:37.249Z",
+  "updatedAt": "2025-10-17T12:32:22.720Z",
   "id": "8CXN1oaIhnozZskl",
   "name": "GitHub Backup n8n Workflows",
   "active": true,
@@ -404,6 +404,73 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "index-exists-condition",
+              "leftValue": "={{ $json.indexSha }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-index-exists",
+      "name": "Check If Index Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3824,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "owner": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubOwner }}"
+        },
+        "repository": {
+          "mode": "name",
+          "value": "={{ $('Configuration').item.json.githubRepo }}"
+        },
+        "filePath": "index.json",
+        "fileContent": "={{ $json.indexContent }}",
+        "commitMessage": "Create index.json",
+        "additionalParameters": {
+          "branch": {
+            "branch": "={{ $('Configuration').item.json.githubBranch }}"
+          }
+        }
+      },
+      "id": "create-index",
+      "name": "Create Index on GitHub",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        4048,
+        432
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "nV59AGebznqs2JRZ",
+          "name": "n8n-mcp-create-backup"
+        }
+      }
+    },
+    {
+      "parameters": {
         "resource": "file",
         "operation": "edit",
         "owner": {
@@ -416,20 +483,20 @@
         },
         "filePath": "index.json",
         "fileContent": "={{ $json.indexContent }}",
-        "commitMessage": "Backup complete",
+        "commitMessage": "Update index.json",
         "additionalParameters": {
           "branch": {
             "branch": "={{ $('Configuration').item.json.githubBranch }}"
           }
         }
       },
-      "id": "save-index",
-      "name": "Save Index to GitHub",
+      "id": "update-index",
+      "name": "Update Index on GitHub",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1.1,
       "position": [
-        3824,
-        528
+        4048,
+        624
       ],
       "webhookId": "332ab83f-921c-43f4-a6eb-36f364d3106b",
       "credentials": {
@@ -643,7 +710,25 @@
       "main": [
         [
           {
-            "node": "Save Index to GitHub",
+            "node": "Check If Index Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Index Exists": {
+      "main": [
+        [
+          {
+            "node": "Update Index on GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Index on GitHub",
             "type": "main",
             "index": 0
           }
@@ -661,7 +746,7 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "190c1c5f-700f-4d65-b479-490132237227",
+  "versionId": "f0ea7544-75a7-42bb-9474-5894dae02148",
   "triggerCount": 1,
   "shared": [
     {
@@ -710,5 +795,5 @@
     }
   ],
   "tags": [],
-  "_isNew": true
+  "_isNew": false
 }
